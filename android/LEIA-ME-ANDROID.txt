@@ -1,0 +1,28 @@
+MPC-HC Player para Android (APK)
+================================
+
+O aplicativo usa o MESMO index.html do programa de Windows (pasta acima de "android").
+Qualquer mudança no index.html vale para o Windows e para o Android.
+
+COMO GERAR O APK
+
+Opção 1 - GitHub (sem instalar nada):
+  1. Envie o conteúdo desta pasta para um repositório no GitHub.
+  2. Abra a aba "Actions", escolha "Compilar APK Android" e clique em "Run workflow"
+     (também roda sozinho a cada push em main/master).
+  3. No fim da execução, baixe o artefato "MPC-HC-Player-Android" (app-debug.apk).
+
+Opção 2 - Android Studio:
+  1. Abra a pasta "android" no Android Studio e aguarde a sincronização.
+  2. Menu Build > Build Bundle(s) / APK(s) > Build APK(s).
+  3. O arquivo fica em android/app/build/outputs/apk/debug/app-debug.apk.
+
+COMO INSTALAR NO CELULAR
+  1. Copie o app-debug.apk para o celular.
+  2. Abra o arquivo e permita "instalar apps de fontes desconhecidas" quando o Android pedir.
+  3. Se o Play Protect avisar, escolha "Instalar mesmo assim" (o app não foi publicado na Play Store).
+
+REQUISITOS: Android 10 ou mais novo.
+
+ONDE FICAM AS GRAVAÇÕES: Downloads/MPC-HC Player (formato MP4 quando o aparelho
+suporta; senão WebM).

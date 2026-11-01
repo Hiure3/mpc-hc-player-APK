@@ -1,0 +1,1696 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MPC-HC Audio/Video Player & Studio</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+    body {
+      background-color: #121212;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 12px;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    /* Menu Bar */
+    .menu-bar {
+      background: #1e1e1e;
+      border-bottom: 1px solid #2a2a2a;
+      display: flex;
+      padding: 3px 8px;
+      gap: 15px;
+      font-size: 11px;
+    }
+    .menu-item { cursor: pointer; padding: 2px 6px; color: #ccc; }
+    .menu-item:hover { background: #333; color: #fff; border-radius: 2px; }
+
+    /* Main Container */
+    .main-container {
+      display: flex;
+      flex: 1;
+      background: #000;
+      overflow: hidden;
+    }
+    .video-container {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #000;
+    }
+    video { width: 100%; height: 100%; object-fit: contain; }
+
+    /* Side Panel - Optimized Layout */
+    .side-panel {
+      width: 260px;
+      background: #181818;
+      border-left: 1px solid #2d2d2d;
+      display: flex;
+      flex-direction: column;
+      padding: 8px;
+      gap: 8px;
+      overflow-y: auto;
+      min-height: 0;
+    }
+    .side-panel::-webkit-scrollbar { width: 6px; }
+    .side-panel::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+
+    .panel-section {
+      background: #151515;
+      border: 1px solid #2a2a2a;
+      border-radius: 4px;
+      padding: 6px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-height: 0;
+    }
+    /* Distribui o espaço livre entre as seções (preenche toda a altura) */
+    .sec-spectrum { flex: 3 1 auto; }
+    .sec-volume   { flex: 1.5 1 auto; }
+    .sec-eq       { flex: 3 1 auto; }
+    .sec-rec      { flex: 1 1 auto; }
+    .panel-title {
+      font-weight: bold;
+      color: #00e676;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid #222;
+      padding-bottom: 3px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* VU Meters & Spectrum Row */
+    .meters-row {
+      display: flex;
+      gap: 6px;
+      flex: 1;
+      min-height: 75px;
+    }
+    .vu-box {
+      width: 45px;
+      background: #0a0a0a;
+      border: 1px solid #282828;
+      border-radius: 3px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 4px 0;
+    }
+    .vu-channels {
+      display: flex;
+      flex: 1;
+      width: 100%;
+      justify-content: space-around;
+      align-items: flex-end;
+      padding: 0 4px;
+    }
+    .vu-channel {
+      width: 12px;
+      height: 100%;
+      background: #151515;
+      display: flex;
+      flex-direction: column-reverse;
+      border-radius: 1px;
+      overflow: hidden;
+      border: 1px solid #222;
+    }
+    .vu-fill {
+      width: 100%;
+      height: 100%;
+      clip-path: inset(100% 0 0 0);
+      background: linear-gradient(to top, #00e676 0%, #00e676 70%, #ffeb3b 85%, #ff1744 100%);
+    }
+    .vu-label { font-size: 8px; color: #888; margin-top: 2px; }
+
+    .spectrum-box {
+      flex: 1;
+      background: #0a0a0a;
+      border: 1px solid #282828;
+      border-radius: 3px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+    }
+    .spec-canvas-wrap { flex: 1; position: relative; min-height: 0; }
+    canvas#spectrumCanvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    .freq-markers {
+      position: relative;
+      height: 12px;
+      font-size: 8px;
+      color: #777;
+      background: #050505;
+      border-top: 1px solid #1f1f1f;
+    }
+    .freq-markers span { position: absolute; top: 1px; transform: translateX(-50%); white-space: nowrap; }
+    .freq-markers span.first { transform: none; }
+
+    /* Leitura numérica de dB */
+    .db-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+    .db-cell {
+      background: #0a0a0a;
+      border: 1px solid #282828;
+      border-radius: 3px;
+      padding: 3px 2px;
+      text-align: center;
+      font-family: Consolas, monospace;
+      font-size: 12px;
+      color: #00e676;
+      white-space: nowrap;
+    }
+    .db-cell small { display: block; font-family: 'Segoe UI', sans-serif; font-size: 8px; color: #777; letter-spacing: 0.5px; }
+    .db-cell.hot { color: #ffeb3b; }
+    .db-cell.clip { color: #ff1744; border-color: #ff1744; }
+    #dbCellPeak { cursor: pointer; }
+
+    /* Abas de predefinições do equalizador */
+    .preset-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+    .preset-tab {
+      padding: 5px 2px;
+      font-size: 10px;
+      white-space: nowrap;
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 3px;
+      color: #999;
+      text-align: center;
+    }
+    .preset-tab:hover { background: #1a1a1a; border-color: #444; color: #ddd; }
+    .preset-tab.active { background: #0f2a1c; border-color: #00e676; color: #00e676; font-weight: bold; }
+    .preset-hint { font-size: 9px; color: #777; text-align: center; min-height: 22px; line-height: 11px; }
+    .mini-btn { padding: 1px 6px; font-size: 9px; background: #1c1c1c; color: #aaa; }
+
+    /* Painel de análise/correção de áudio (aparece só quando toca apenas áudio) */
+    .ai-panel { display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; flex-direction: column; gap: 10px; padding: 14px; overflow-y: auto; background: #0b0b0b; user-select: text; }
+    body.audio-only .ai-panel { display: flex; }
+    .ai-panel::-webkit-scrollbar { width: 6px; }
+    .ai-panel::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+    .ai-file { color: #00e676; font-size: 13px; font-weight: bold; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ai-buttons { display: flex; gap: 8px; }
+    .ai-btn { flex: 1; padding: 10px 8px; font-size: 12px; }
+    .ai-btn:disabled { opacity: 0.5; cursor: default; }
+    .ai-btn.applied { background: #0f2a1c; border-color: #00e676; color: #00e676; }
+    .ai-status { font-size: 11px; color: #888; min-height: 14px; }
+    .ai-score { display: flex; align-items: center; gap: 14px; background: #151515; border: 1px solid #2a2a2a; border-radius: 4px; padding: 10px 12px; }
+    .ai-score-num { font-size: 36px; font-weight: bold; font-family: Consolas, monospace; line-height: 1; }
+    .ai-score-txt { font-size: 12px; color: #ccc; }
+    .ai-score-txt b { display: block; font-size: 14px; margin-bottom: 2px; color: #eee; }
+    .ai-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+    .ai-card { background: #121212; border: 1px solid #232323; border-radius: 3px; padding: 6px 8px; }
+    .ai-card small { display: block; color: #777; font-size: 9px; text-transform: uppercase; letter-spacing: 0.4px; }
+    .ai-card span { font-family: Consolas, monospace; font-size: 13px; color: #e0e0e0; }
+    .ai-h { font-size: 10px; font-weight: bold; color: #00e676; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #222; padding-bottom: 3px; margin-top: 4px; }
+    .ai-issue { background: #131313; border: 1px solid #232323; border-left: 3px solid #ffeb3b; border-radius: 3px; padding: 7px 9px; font-size: 11px; color: #bbb; line-height: 1.45; }
+    .ai-issue.alta { border-left-color: #ff1744; }
+    .ai-issue.baixa { border-left-color: #4fc3f7; }
+    .ai-issue b { display: block; color: #eee; font-size: 12px; margin-bottom: 2px; }
+    .ai-issue em { color: #00e676; font-style: normal; }
+    .ai-fixbox { background: #0f2a1c; border: 1px solid #00e676; border-radius: 4px; padding: 8px 10px; font-size: 11px; color: #cfe; }
+    .ai-fixbox b { color: #00e676; font-size: 12px; }
+    .ai-fixbox ul { margin: 4px 0 6px 16px; padding: 0; line-height: 1.5; }
+    .ai-note { font-size: 10px; color: #777; line-height: 1.4; }
+    .ai-h-row { display: flex; justify-content: space-between; align-items: center; }
+
+    /* Controls & Sliders */
+    .control-row {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: #bbb;
+    }
+    .control-label span { color: #00e676; font-family: monospace; }
+    .sec-volume .control-row { flex: 1; justify-content: center; gap: 6px; }
+    .sec-volume .control-label { font-size: 11px; }
+    input[type=range] {
+      width: 100%;
+      accent-color: #00e676;
+      height: 4px;
+      background: #333;
+      border-radius: 2px;
+      outline: none;
+    }
+
+    .eq-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      flex: 1;
+      min-height: 0;
+    }
+    .eq-slider-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: #111;
+      padding: 6px 4px;
+      border-radius: 3px;
+      border: 1px solid #222;
+      min-height: 0;
+    }
+    .eq-slider-wrapper label { font-size: 10px; color: #aaa; margin-bottom: 4px; }
+    .eq-slider-wrapper input[type=range] {
+      writing-mode: bt-lr;
+      -webkit-appearance: slider-vertical;
+      width: 8px;
+      flex: 1;
+      min-height: 60px;
+    }
+    .eq-val { font-size: 9px; color: #00e676; margin-top: 4px; font-family: monospace; }
+    .sec-rec .btn-action { flex: 1; min-height: 40px; font-size: 12px; }
+    .sec-rec #recStatus { margin-top: 0 !important; }
+
+    /* Action Buttons */
+    .btn-action {
+      background: #222;
+      border: 1px solid #3a3a3a;
+      color: #e0e0e0;
+      padding: 6px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background 0.15s;
+    }
+    .btn-action:hover { background: #333; border-color: #00e676; color: #fff; }
+    .btn-action.recording {
+      background: #b71c1c;
+      border-color: #ff5252;
+      color: #fff;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.6; }
+      100% { opacity: 1; }
+    }
+
+    /* Controls Bar */
+    .controls-bar {
+      background: #181818;
+      border-top: 1px solid #2d2d2d;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .seek-bar-container { display: flex; align-items: center; gap: 8px; }
+    .time-display { font-family: monospace; font-size: 11px; color: #aaa; width: 60px; text-align: center; }
+    .buttons-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .btn-group { display: flex; align-items: center; gap: 6px; }
+    button {
+      background: #282828;
+      border: 1px solid #3a3a3a;
+      color: #e0e0e0;
+      padding: 4px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 11px;
+    }
+    button:hover { background: #383838; border-color: #555; }
+    button:active { background: #1f1f1f; }
+    .file-input { display: none; }
+    /* ===== Celular / tablet em pé (usado pelo APK Android) ===== */
+    @media (max-width: 820px) {
+      body { height: 100vh; height: 100dvh; font-size: 13px; }
+      .menu-bar { overflow-x: auto; white-space: nowrap; gap: 8px; }
+      .main-container { flex-direction: column; overflow-y: auto; }
+      .video-container { flex: none; height: 34vh; height: 34dvh; }
+      body.audio-only .video-container { height: 60vh; height: 60dvh; }
+      .side-panel { width: 100%; flex: none; border-left: none; border-top: 1px solid #2d2d2d; overflow: visible; }
+      .side-panel .panel-section { flex: none; }
+      .spec-canvas-wrap { min-height: 110px; }
+      .meters-row { min-height: 130px; }
+      .eq-slider-wrapper input[type=range] { min-height: 120px; }
+      .preset-tab { padding: 9px 2px; font-size: 11px; }
+      .controls-bar { padding: 8px; }
+      .buttons-row { flex-wrap: wrap; }
+      .btn-group { flex-wrap: wrap; gap: 6px; }
+      button { padding: 9px 12px; font-size: 12px; }
+      .mini-btn { padding: 4px 8px; font-size: 10px; }
+      .ai-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div class="menu-bar">
+    <div class="menu-item" onclick="document.getElementById('fileInput').click()">Arquivo</div>
+    <div class="menu-item">Exibir</div>
+    <div class="menu-item">Áudio & Equalização</div>
+    <div class="menu-item">Ajuda</div>
+  </div>
+
+  <div class="main-container">
+    <div class="video-container">
+      <video id="mediaPlayer" crossorigin="anonymous" playsinline></video>
+        <div class="ai-panel" id="aiPanel">
+          <div class="ai-file" id="aiFile"></div>
+          <div class="ai-buttons">
+            <button id="aiAnalyzeBtn" class="btn-action ai-btn" title="Análise automática no seu computador">🔍 Analisar qualidade (I.A.)</button>
+            <button id="aiFixBtn" class="btn-action ai-btn" title="Aplica correções automáticas com base na análise">✨ Corrigir pela I.A.</button>
+          </div>
+          <div class="ai-status" id="aiStatus"></div>
+          <div id="aiFixBox"></div>
+          <div id="aiReport"></div>
+          <div id="aiRtBox">
+            <div class="ai-h ai-h-row"><span>Medições em tempo real</span><button id="aiRtReset" class="mini-btn" title="Zerar contadores e histórico">Zerar</button></div>
+            <div class="ai-grid">
+              <div class="ai-card"><small>Duração</small><span id="rtDur">—</span></div>
+              <div class="ai-card"><small>Canais</small><span id="rtCh">—</span></div>
+              <div class="ai-card"><small>Volume (aprox.)</small><span id="rtLufs">—</span></div>
+              <div class="ai-card"><small>Pico</small><span id="rtPeak">—</span></div>
+              <div class="ai-card"><small>Dinâmica (LRA)</small><span id="rtLra">—</span></div>
+              <div class="ai-card"><small>Agudos até</small><span id="rtCut">—</span></div>
+              <div class="ai-card"><small>Fase estéreo</small><span id="rtCorr">—</span></div>
+              <div class="ai-card"><small>Trechos estourados</small><span id="rtClip">—</span></div>
+              <div class="ai-card"><small>Ruído nas pausas</small><span id="rtNoise">—</span></div>
+            </div>
+            <div class="ai-note">Medido na saída do player, já com equalizador, correção e limitador, e antes do controle de volume. Duração mostra o tempo atual; o volume é o momentâneo (últimos 0,4 s). Dinâmica e ruído precisam de alguns segundos de reprodução.</div>
+          </div>
+          <div id="aiIssues"></div>
+        </div>
+    </div>
+
+    <!-- Side Panel -->
+    <div class="side-panel">
+      <!-- Section 1: VU & Spectrum -->
+      <div class="panel-section sec-spectrum">
+        <div class="panel-title"><span>Áudio & Espectro (20Hz - 20kHz)</span></div>
+        <div class="meters-row">
+          <div class="vu-box">
+            <div class="vu-channels">
+              <div class="vu-channel"><div id="vuLeft" class="vu-fill"></div></div>
+              <div class="vu-channel"><div id="vuRight" class="vu-fill"></div></div>
+            </div>
+            <div class="vu-label">L / R</div>
+          </div>
+          <div class="spectrum-box">
+            <div class="spec-canvas-wrap"><canvas id="spectrumCanvas"></canvas></div>
+            <div class="freq-markers">
+              <span class="first" style="left:2px">20Hz</span>
+              <span style="left:23.3%">100Hz</span>
+              <span style="left:56.7%">1kHz</span>
+              <span style="left:90%">10kHz</span>
+            </div>
+          </div>
+        </div>
+        <div class="db-row">
+          <div class="db-cell" id="dbCellL"><small>ESQ (L)</small><span id="dbL">-∞</span> dB</div>
+          <div class="db-cell" id="dbCellR"><small>DIR (R)</small><span id="dbR">-∞</span> dB</div>
+          <div class="db-cell" id="dbCellPeak" title="Clique para zerar o pico"><small>PICO</small><span id="dbPeak">-∞</span> dB</div>
+        </div>
+      </div>
+
+      <!-- Section 2: Master & Gain -->
+      <div class="panel-section sec-volume">
+        <div class="panel-title">Volume Principal & Ganho</div>
+        <div class="control-row">
+          <div class="control-label">Volume: <span id="volVal">80%</span></div>
+          <input type="range" id="volSlider" min="0" max="1" step="0.01" value="0.8">
+        </div>
+        <div class="control-row">
+          <div class="control-label">Ganho Boost: <span id="gainVal">0 dB</span></div>
+          <input type="range" id="gainSlider" min="0" max="2" step="0.05" value="1">
+        </div>
+      </div>
+
+      <!-- Section 3: Equalizer 3-Band -->
+      <div class="panel-section sec-eq">
+        <div class="panel-title"><span>Equalizador (20Hz - 20kHz)</span><button id="eqReset" class="mini-btn" title="Zerar equalizador">Zerar</button></div>
+        <div class="preset-tabs" id="presetTabs">
+          <button class="preset-tab active" data-preset="manual">Manual</button>
+          <button class="preset-tab" data-preset="music">🎵 Música</button>
+          <button class="preset-tab" data-preset="voice">🎤 Voz</button>
+          <button class="preset-tab" data-preset="choir">👥 Coral</button>
+          <button class="preset-tab" data-preset="youtube">▶ YouTube</button>
+          <button class="preset-tab" data-preset="facebook">📘 Facebook</button>
+        </div>
+        <div class="preset-hint" id="presetHint">Ajuste os controles livremente</div>
+        <div class="eq-grid">
+          <div class="eq-slider-wrapper">
+            <label>Sub/Graves</label>
+            <input type="range" id="eqLow" min="-20" max="20" step="0.5" value="0">
+            <span id="lowVal" class="eq-val">0 dB</span>
+          </div>
+          <div class="eq-slider-wrapper">
+            <label>Médios</label>
+            <input type="range" id="eqMid" min="-20" max="20" step="0.5" value="0">
+            <span id="midVal" class="eq-val">0 dB</span>
+          </div>
+          <div class="eq-slider-wrapper">
+            <label>Agudos</label>
+            <input type="range" id="eqHigh" min="-20" max="20" step="0.5" value="0">
+            <span id="highVal" class="eq-val">0 dB</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Section 4: Export / Save Video -->
+      <div class="panel-section sec-rec">
+        <div class="panel-title">Gravação & Exportação</div>
+        <button id="recordBtn" class="btn-action">🔴 Gravar Vídeo c/ Ajustes</button>
+        <div id="recStatus" style="font-size:9px; color:#888; text-align:center; margin-top:2px;">Pronto: Full HD 1080p · áudio Opus 320 kbps (WebM)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls-bar">
+    <div class="seek-bar-container">
+      <span id="currentTime" class="time-display">00:00</span>
+      <input type="range" id="seekBar" min="0" max="100" step="0.1" value="0" style="flex:1;">
+      <span id="durationTime" class="time-display">00:00</span>
+    </div>
+    <div class="buttons-row">
+      <div class="btn-group">
+        <button id="playBtn">▶ Play</button>
+        <button id="pauseBtn">⏸ Pausa</button>
+        <button id="stopBtn">⏹ Parar</button>
+        <button onclick="document.getElementById('fileInput').click()">📂 Abrir Mídia</button>
+        <input type="file" id="fileInput" class="file-input" accept="audio/*,video/*">
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const media = document.getElementById('mediaPlayer');
+    const playBtn = document.getElementById('playBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const fileInput = document.getElementById('fileInput');
+    const volSlider = document.getElementById('volSlider');
+    const volVal = document.getElementById('volVal');
+    const gainSlider = document.getElementById('gainSlider');
+    const gainVal = document.getElementById('gainVal');
+    const seekBar = document.getElementById('seekBar');
+    const currentTimeEl = document.getElementById('currentTime');
+    const durationTimeEl = document.getElementById('durationTime');
+
+    const vuLeft = document.getElementById('vuLeft');
+    const vuRight = document.getElementById('vuRight');
+    const spectrumCanvas = document.getElementById('spectrumCanvas');
+    const specCtx = spectrumCanvas.getContext('2d');
+
+    const eqLow = document.getElementById('eqLow');
+    const eqMid = document.getElementById('eqMid');
+    const eqHigh = document.getElementById('eqHigh');
+    const lowVal = document.getElementById('lowVal');
+    const midVal = document.getElementById('midVal');
+    const highVal = document.getElementById('highVal');
+
+    const recordBtn = document.getElementById('recordBtn');
+    const recStatus = document.getElementById('recStatus');
+
+    let audioCtx, source, splitter, analyserL, analyserR, analyserSpec;
+    let bqLow, bqMid, bqHigh, gainNode, masterGain;
+    let fixHP, hum1, hum2, limiter, limTrim;
+    let rtMeter = null, rtAn = null;
+    let mediaRecorder, recordedChunks = [];
+    let isRecording = false;
+    let recDest = null;
+
+    function initAudio() {
+      if (audioCtx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      try { audioCtx = new AC({ sampleRate: 48000, latencyHint: 'playback' }); }
+      catch (e) { audioCtx = new AC(); }
+      
+      source = audioCtx.createMediaElementSource(media);
+      
+      bqLow = audioCtx.createBiquadFilter();
+      bqLow.type = 'lowshelf';
+      bqLow.frequency.value = 250;
+
+      bqMid = audioCtx.createBiquadFilter();
+      bqMid.type = 'peaking';
+      bqMid.frequency.value = 1500;
+      bqMid.Q.value = 1;
+
+      bqHigh = audioCtx.createBiquadFilter();
+      bqHigh.type = 'highshelf';
+      bqHigh.frequency.value = 6000;
+
+      gainNode = audioCtx.createGain();
+      masterGain = audioCtx.createGain();
+
+      // nós da correção automática (começam "desligados": sem efeito no som)
+      fixHP = audioCtx.createBiquadFilter();
+      hum1 = audioCtx.createBiquadFilter();
+      hum2 = audioCtx.createBiquadFilter();
+      [fixHP, hum1, hum2].forEach(nd => { nd.type = 'peaking'; nd.frequency.value = 1000; nd.gain.value = 0; });
+      limiter = audioCtx.createDynamicsCompressor();
+      limiter.threshold.value = 0; limiter.knee.value = 0; limiter.ratio.value = 1;
+      limTrim = audioCtx.createGain();
+
+      splitter = audioCtx.createChannelSplitter(2);
+      analyserL = audioCtx.createAnalyser();
+      analyserR = audioCtx.createAnalyser();
+      analyserSpec = audioCtx.createAnalyser();
+
+      analyserL.fftSize = 1024;
+      analyserR.fftSize = 1024;
+      analyserSpec.fftSize = 2048;
+      analyserSpec.smoothingTimeConstant = 0.85;
+
+      // aplica os valores atuais dos controles (inclui predefinições escolhidas antes de abrir a mídia)
+      masterGain.gain.value = parseFloat(volSlider.value);
+      gainNode.gain.value = parseFloat(gainSlider.value);
+      bqLow.gain.value = parseFloat(eqLow.value);
+      bqMid.gain.value = parseFloat(eqMid.value);
+      bqHigh.gain.value = parseFloat(eqHigh.value);
+
+      source.connect(fixHP);
+      fixHP.connect(hum1);
+      hum1.connect(hum2);
+      hum2.connect(bqLow);
+      bqLow.connect(bqMid);
+      bqMid.connect(bqHigh);
+      bqHigh.connect(gainNode);
+      gainNode.connect(limiter);
+      limiter.connect(limTrim);
+      limTrim.connect(masterGain);
+
+      // medidor em tempo real (lê a saída do processamento, antes do controle de volume)
+      try {
+        rtMeter = makeRtMeter(audioCtx.sampleRate);
+        const proc = audioCtx.createScriptProcessor(4096, 2, 2);
+        proc.onaudioprocess = (ev) => {
+          if (media.paused || media.ended) return;
+          const inb = ev.inputBuffer;
+          const L = inb.getChannelData(0), R = inb.numberOfChannels > 1 ? inb.getChannelData(1) : L;
+          rtMeter.push(L, R, L.length);
+        };
+        const mute = audioCtx.createGain();
+        mute.gain.value = 0;
+        limTrim.connect(proc);
+        proc.connect(mute);
+        mute.connect(audioCtx.destination);
+        rtAn = audioCtx.createAnalyser();
+        rtAn.fftSize = 8192;
+        rtAn.smoothingTimeConstant = 0.95;
+        limTrim.connect(rtAn);
+      } catch (e) { rtMeter = null; rtAn = null; }
+      
+      masterGain.connect(audioCtx.destination);
+
+      masterGain.connect(splitter);
+      splitter.connect(analyserL, 0);
+      splitter.connect(analyserR, 1);
+      masterGain.connect(analyserSpec);
+
+      startVisualizer();
+    }
+
+    function resizeSpectrum() {
+      const w = spectrumCanvas.clientWidth, h = spectrumCanvas.clientHeight;
+      if (w && h && (spectrumCanvas.width !== w || spectrumCanvas.height !== h)) {
+        spectrumCanvas.width = w;
+        spectrumCanvas.height = h;
+      }
+    }
+    new ResizeObserver(resizeSpectrum).observe(spectrumCanvas);
+
+    // ---------- Medidor de nível em dBFS (0 dB = máximo digital) ----------
+    const dbL = document.getElementById('dbL');
+    const dbR = document.getElementById('dbR');
+    const dbPeak = document.getElementById('dbPeak');
+    const dbCellL = document.getElementById('dbCellL');
+    const dbCellR = document.getElementById('dbCellR');
+    const dbCellPeak = document.getElementById('dbCellPeak');
+    const DB_FLOOR = -90;
+    let bufL, bufR;
+    let lvlL = DB_FLOOR, lvlR = DB_FLOOR, peakHold = DB_FLOOR, peakStamp = 0, frame = 0;
+
+    function peakDb(an, buf) {
+      an.getFloatTimeDomainData(buf);
+      let peak = 0;
+      for (let i = 0; i < buf.length; i++) {
+        const a = Math.abs(buf[i]);
+        if (a > peak) peak = a;
+      }
+      return peak > 3e-5 ? Math.max(DB_FLOOR, 20 * Math.log10(peak)) : DB_FLOOR;
+    }
+    function fmtDb(v) { return v <= DB_FLOOR ? '-∞' : v.toFixed(1); }
+    function levelClass(cell, v) {
+      cell.classList.toggle('clip', v >= -0.5);
+      cell.classList.toggle('hot', v < -0.5 && v >= -6);
+    }
+
+    function updateLevels() {
+      if (!bufL) {
+        bufL = new Float32Array(analyserL.fftSize);
+        bufR = new Float32Array(analyserR.fftSize);
+      }
+      const nowL = peakDb(analyserL, bufL);
+      const nowR = peakDb(analyserR, bufR);
+
+      // ataque instantâneo, queda suave
+      lvlL = nowL > lvlL ? nowL : Math.max(DB_FLOOR, lvlL - 0.6);
+      lvlR = nowR > lvlR ? nowR : Math.max(DB_FLOOR, lvlR - 0.6);
+
+      // pico retido por 2 s, depois cai lentamente
+      const cur = Math.max(nowL, nowR);
+      const now = performance.now();
+      if (cur >= peakHold) { peakHold = cur; peakStamp = now; }
+      else if (now - peakStamp > 2000) peakHold = Math.max(cur, peakHold - 0.2);
+
+      // barras VU (escala de -60 dB a 0 dB)
+      const pctL = Math.min(100, Math.max(0, (lvlL + 60) / 60 * 100));
+      const pctR = Math.min(100, Math.max(0, (lvlR + 60) / 60 * 100));
+      vuLeft.style.clipPath = 'inset(' + (100 - pctL) + '% 0 0 0)';
+      vuRight.style.clipPath = 'inset(' + (100 - pctR) + '% 0 0 0)';
+
+      // texto atualizado ~20x por segundo para ficar legível
+      if (++frame % 3 === 0) {
+        dbL.textContent = fmtDb(lvlL);
+        dbR.textContent = fmtDb(lvlR);
+        dbPeak.textContent = fmtDb(peakHold);
+        levelClass(dbCellL, lvlL);
+        levelClass(dbCellR, lvlR);
+        levelClass(dbCellPeak, peakHold);
+      }
+    }
+    dbCellPeak.onclick = () => { peakHold = DB_FLOOR; peakStamp = 0; };
+
+    // Espectro em escala logarítmica (20 Hz - 20 kHz), igual aos marcadores abaixo do gráfico
+    const SPEC_BARS = 64, F_MIN = 20, F_MAX = 20000;
+    let specData;
+    function drawSpectrum() {
+      const w = spectrumCanvas.width, h = spectrumCanvas.height;
+      specCtx.fillStyle = '#0a0a0a';
+      specCtx.fillRect(0, 0, w, h);
+      if (!specData) specData = new Uint8Array(analyserSpec.frequencyBinCount);
+      analyserSpec.getByteFrequencyData(specData);
+
+      const binHz = audioCtx.sampleRate / analyserSpec.fftSize;
+      const last = specData.length - 1;
+      const bw = w / SPEC_BARS;
+      const gradient = specCtx.createLinearGradient(0, h, 0, 0);
+      gradient.addColorStop(0, '#00e676');
+      gradient.addColorStop(0.7, '#ffeb3b');
+      gradient.addColorStop(1, '#ff1744');
+      specCtx.fillStyle = gradient;
+
+      for (let b = 0; b < SPEC_BARS; b++) {
+        const f0 = F_MIN * Math.pow(F_MAX / F_MIN, b / SPEC_BARS);
+        const f1 = F_MIN * Math.pow(F_MAX / F_MIN, (b + 1) / SPEC_BARS);
+        const i0 = Math.min(last, Math.floor(f0 / binHz));
+        const i1 = Math.min(last, Math.floor(f1 / binHz));
+        let v;
+        if (i1 > i0) {
+          v = 0;
+          for (let i = i0; i <= i1; i++) if (specData[i] > v) v = specData[i];
+        } else {
+          const pos = Math.sqrt(f0 * f1) / binHz;
+          const i = Math.min(last - 1, Math.floor(pos));
+          const frac = pos - i;
+          v = specData[i] * (1 - frac) + specData[i + 1] * frac;
+        }
+        const barH = (v / 255) * h;
+        specCtx.fillRect(b * bw, h - barH, Math.max(1, bw - 1), barH);
+      }
+    }
+
+    function startVisualizer() {
+      function draw() {
+        requestAnimationFrame(draw);
+        if (!analyserL || !analyserR || !analyserSpec) return;
+
+        updateLevels();
+
+        drawSpectrum();
+      }
+      
+      resizeSpectrum();
+      draw();
+    }
+
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        if (media.src && media.src.startsWith('blob:')) URL.revokeObjectURL(media.src);
+        resetAi();
+        currentFile = file;
+        currentFileName = file.name;
+        media.src = URL.createObjectURL(file);
+        media.play();
+        initAudio();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+      }
+      e.target.value = '';
+    });
+
+    playBtn.onclick = () => { media.play(); initAudio(); if(audioCtx) audioCtx.resume(); };
+    pauseBtn.onclick = () => media.pause();
+    stopBtn.onclick = () => { media.pause(); media.currentTime = 0; };
+
+    volSlider.oninput = (e) => {
+      const val = parseFloat(e.target.value);
+      if (masterGain) masterGain.gain.value = val;
+      volVal.textContent = Math.round(val * 100) + '%';
+    };
+
+    gainSlider.oninput = (e) => {
+      const val = parseFloat(e.target.value);
+      if (gainNode) gainNode.gain.value = val;
+      if (val <= 0) gainVal.textContent = '-∞ dB';
+      else {
+        const db = 20 * Math.log10(val);
+        gainVal.textContent = (Math.abs(db) < 0.05 ? '0' : (db > 0 ? '+' : '') + db.toFixed(1)) + ' dB';
+      }
+    };
+
+    eqLow.oninput = (e) => {
+      const val = parseFloat(e.target.value);
+      if (bqLow) bqLow.gain.value = val;
+      lowVal.textContent = val + ' dB';
+    };
+    eqMid.oninput = (e) => {
+      const val = parseFloat(e.target.value);
+      if (bqMid) bqMid.gain.value = val;
+      midVal.textContent = val + ' dB';
+    };
+    eqHigh.oninput = (e) => {
+      const val = parseFloat(e.target.value);
+      if (bqHigh) bqHigh.gain.value = val;
+      highVal.textContent = val + ' dB';
+    };
+
+    media.ontimeupdate = () => {
+      if (media.duration) {
+        seekBar.value = (media.currentTime / media.duration) * 100;
+        currentTimeEl.textContent = formatTime(media.currentTime);
+        durationTimeEl.textContent = formatTime(media.duration);
+      }
+    };
+
+    seekBar.oninput = (e) => {
+      if (media.duration) {
+        media.currentTime = (e.target.value / 100) * media.duration;
+      }
+    };
+
+    function formatTime(s) {
+      const mins = Math.floor(s / 60);
+      const secs = Math.floor(s % 60);
+      return `${mins.toString().padStart(2,'0')}:${secs.toString().padStart(2,'0')}`;
+    }
+
+    // ---------- Predefinições do equalizador (graves / médios / agudos em dB) ----------
+    const PRESETS = {
+      music: { low: 3,  mid: -1, high: 2.5, hint: 'Música: graves encorpados e agudos brilhantes' },
+      voice: { low: -5, mid: 4,  high: 1.5, hint: 'Voz: corta graves e realça a clareza da fala' },
+      choir: { low: 2,  mid: 2,  high: 3,   hint: 'Coral: calor nos graves e mais brilho nas vozes' },
+      youtube:  { low: -1.5, mid: 2, high: 1.5, hint: 'YouTube: voz clara em alto-falante pequeno. Mantenha o PICO abaixo de -1 dB' },
+      facebook: { low: -3,   mid: 3, high: 2,   hint: 'Facebook: pensado para celular; reduz graves que o alto-falante não toca' }
+    };
+    const presetTabs = document.querySelectorAll('.preset-tab');
+    const presetHint = document.getElementById('presetHint');
+    let applyingPreset = false;
+
+    function setActiveTab(name) {
+      presetTabs.forEach(t => t.classList.toggle('active', t.dataset.preset === name));
+      presetHint.textContent = PRESETS[name] ? PRESETS[name].hint : 'Ajuste os controles livremente';
+    }
+    function setSlider(el, v) {
+      el.value = v;
+      el.dispatchEvent(new Event('input'));
+    }
+    function applyEq(low, mid, high) {
+      applyingPreset = true;
+      setSlider(eqLow, low);
+      setSlider(eqMid, mid);
+      setSlider(eqHigh, high);
+      applyingPreset = false;
+    }
+    presetTabs.forEach(tab => {
+      tab.onclick = () => {
+        const name = tab.dataset.preset;
+        if (PRESETS[name]) applyEq(PRESETS[name].low, PRESETS[name].mid, PRESETS[name].high);
+        setActiveTab(name);
+      };
+    });
+    [eqLow, eqMid, eqHigh].forEach(el => {
+      el.addEventListener('input', () => { if (!applyingPreset) setActiveTab('manual'); });
+    });
+    document.getElementById('eqReset').onclick = () => { applyEq(0, 0, 0); setActiveTab('manual'); };
+
+    recordBtn.onclick = () => {
+      if (!media.src) {
+        alert('Abra um arquivo de vídeo ou áudio primeiro!');
+        return;
+      }
+
+      if (!isRecording) {
+        startRecording();
+      } else {
+        stopRecording();
+      }
+    };
+
+    /*AI-START*/
+    const tick = () => new Promise(r => setTimeout(r, 0));
+    const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+    const sgn = (v) => (v > 0 ? '+' : '') + v.toFixed(1);
+    const dbOf = (x) => 10 * Math.log10(x);
+
+    function median(a) { const b = Array.from(a).sort((x, y) => x - y); return b.length ? b[b.length >> 1] : NaN; }
+    function percentile(a, p) { const b = Array.from(a).sort((x, y) => x - y); return b.length ? b[Math.min(b.length - 1, Math.floor(p * b.length))] : NaN; }
+
+    // Filtros do padrão de loudness ITU-R BS.1770 (ponderação K)
+    function bqNorm(b0, b1, b2, a0, a1, a2) { return { b0: b0 / a0, b1: b1 / a0, b2: b2 / a0, a1: a1 / a0, a2: a2 / a0 }; }
+    function bqHighShelf(fs, f0, G, Q) {
+      const A = Math.pow(10, G / 40), w0 = 2 * Math.PI * f0 / fs, c = Math.cos(w0);
+      const al = Math.sin(w0) / (2 * Q), sA = Math.sqrt(A);
+      return bqNorm(
+        A * ((A + 1) + (A - 1) * c + 2 * sA * al),
+        -2 * A * ((A - 1) + (A + 1) * c),
+        A * ((A + 1) + (A - 1) * c - 2 * sA * al),
+        (A + 1) - (A - 1) * c + 2 * sA * al,
+        2 * ((A - 1) - (A + 1) * c),
+        (A + 1) - (A - 1) * c - 2 * sA * al);
+    }
+    function bqHighPass(fs, f0, Q) {
+      const w0 = 2 * Math.PI * f0 / fs, c = Math.cos(w0), al = Math.sin(w0) / (2 * Q);
+      return bqNorm((1 + c) / 2, -(1 + c), (1 + c) / 2, 1 + al, -2 * c, 1 - al);
+    }
+
+    function makeFFT(n) {
+      const cosT = new Float64Array(n / 2), sinT = new Float64Array(n / 2);
+      for (let i = 0; i < n / 2; i++) { cosT[i] = Math.cos(2 * Math.PI * i / n); sinT[i] = Math.sin(2 * Math.PI * i / n); }
+      const bits = Math.round(Math.log2(n));
+      const rev = new Uint32Array(n);
+      for (let i = 0; i < n; i++) { let r = 0, x = i; for (let b = 0; b < bits; b++) { r = (r << 1) | (x & 1); x >>= 1; } rev[i] = r; }
+      return function (re, im) {
+        for (let i = 0; i < n; i++) {
+          const j = rev[i];
+          if (j > i) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
+        }
+        for (let size = 2; size <= n; size *= 2) {
+          const half = size / 2, step = n / size;
+          for (let i = 0; i < n; i += size) {
+            for (let j = i, k = 0; j < i + half; j++, k += step) {
+              const l = j + half;
+              const tr = re[l] * cosT[k] + im[l] * sinT[k];
+              const ti = -re[l] * sinT[k] + im[l] * cosT[k];
+              re[l] = re[j] - tr; im[l] = im[j] - ti;
+              re[j] += tr; im[j] += ti;
+            }
+          }
+        }
+      };
+    }
+
+    function kCoefs(fs) {
+      // coeficientes exatos da norma BS.1770 para 48 kHz (o áudio é decodificado a 48 kHz)
+      return {
+        hs: fs === 48000
+          ? { b0: 1.53512485958697, b1: -2.69169618940638, b2: 1.19839281085285, a1: -1.69065929318241, a2: 0.73248077421585 }
+          : bqHighShelf(fs, 1681.974450955533, 3.999843853973347, 0.7071752369554196),
+        hp: fs === 48000
+          ? { b0: 1, b1: -2, b2: 1, a1: -1.99004745483398, a2: 0.99007225036621 }
+          : bqHighPass(fs, 38.13547087602444, 0.5003270373238773)
+      };
+    }
+
+    // Dinâmica (LRA) a partir das potências médias de janelas de 3 s
+    function lraFromShortTerm(st) {
+      const absThr = Math.pow(10, (-70 + 0.691) / 10);
+      const above = st.filter(p => p > absThr);
+      if (above.length < 3) return null;
+      const mean = above.reduce((a, b) => a + b, 0) / above.length;
+      const keep = above.filter(p => p > mean * 0.01).map(p => -0.691 + dbOf(p));
+      return keep.length >= 3 ? percentile(keep, 0.95) - percentile(keep, 0.10) : null;
+    }
+
+    // Ruído de fundo a partir do nível (dBFS) de cada trecho de 100 ms
+    function noiseFloorFromDb(rawDb) {
+      const valid = [];
+      for (const v of rawDb) if (v > -90) valid.push(v);
+      if (valid.length <= 20) return null;
+      const med = median(valid);
+      const quiet = valid.filter(v => v < med - 20);
+      return (quiet.length >= 10 && quiet.length >= valid.length * 0.05) ? percentile(quiet, 0.10) : null;
+    }
+
+    // Espectro de potência P (bins 0..N/2) -> equilíbrio tonal, largura de banda e zumbido
+    function spectrumMetrics(P, N, fs) {
+      const out = { lfmf: null, hfmf: null, cutoff: null, hum: null };
+      const binHz = fs / N;
+      const bandE = (f1, f2) => {
+        let s = 0;
+        const k1 = Math.max(1, Math.ceil(f1 / binHz)), k2 = Math.min(N / 2, Math.floor(f2 / binHz));
+        for (let k = k1; k <= k2; k++) s += P[k];
+        return s;
+      };
+      const bandMean = (f1, f2) => {
+        const k1 = Math.max(1, Math.ceil(f1 / binHz)), k2 = Math.min(N / 2, Math.floor(f2 / binHz));
+        return k2 >= k1 ? bandE(f1, f2) / (k2 - k1 + 1) : 0;
+      };
+      const lf = bandE(40, 250), mf = bandE(250, 2000), hf = bandE(4000, 12000);
+      if (mf > 0 && lf > 0 && hf > 0) { out.lfmf = dbOf(lf / mf); out.hfmf = dbOf(hf / mf); }
+
+      // largura de banda: onde o espectro "acaba"
+      const ref = bandMean(5000, 9000);
+      const maxF = Math.min(22000, fs / 2 - 500);
+      if (ref > 0) {
+        let cutoff = maxF;
+        for (let f = 10000; f + 500 <= maxF; f += 500) {
+          const m = bandMean(f, f + 500);
+          if (dbOf((m + 1e-30) / ref) < -65) { cutoff = f; break; }
+        }
+        out.cutoff = cutoff;
+      }
+
+      // zumbido da rede elétrica (50/60 Hz)
+      let best = null;
+      for (const f0 of [50, 60]) {
+        const prom = (f) => {
+          const k0 = Math.round(f / binHz);
+          const around = [];
+          for (let k = k0 - 8; k <= k0 - 3; k++) around.push(P[k]);
+          for (let k = k0 + 3; k <= k0 + 8; k++) around.push(P[k]);
+          const base = median(around) + 1e-30;
+          const pk = Math.max(P[k0 - 1], P[k0], P[k0 + 1]);
+          return dbOf(pk / base);
+        };
+        const p1 = prom(f0), p2 = prom(2 * f0);
+        if (p1 >= 15 && p2 >= 6 && (!best || p1 > best.prom)) best = { freq: f0, prom: p1 };
+      }
+      out.hum = best;
+      return out;
+    }
+
+    // Medidor em tempo real: recebe o áudio aos poucos e mantém as mesmas medições da análise
+    function makeRtMeter(fs) {
+      const hop = Math.round(fs * 0.1);
+      const kw = kCoefs(fs), kHS = kw.hs, kHP = kw.hp;
+      let stt, zRing, cLL, cRR, cLR, cM, cS, pRing, stPow, rawDb;
+      let n, sw, sr, sLL, sRR, sLR, sM, sS, cpeak, chunkCount, clipRuns, slowLra, slowNoise;
+
+      function reset() {
+        stt = [{ s1a: 0, s1b: 0, s2a: 0, s2b: 0, run: 0 }, { s1a: 0, s1b: 0, s2a: 0, s2b: 0, run: 0 }];
+        zRing = new Float64Array(30); cLL = new Float64Array(30); cRR = new Float64Array(30);
+        cLR = new Float64Array(30); cM = new Float64Array(30); cS = new Float64Array(30);
+        pRing = new Float64Array(10);
+        stPow = []; rawDb = [];
+        n = 0; sw = 0; sr = 0; sLL = 0; sRR = 0; sLR = 0; sM = 0; sS = 0; cpeak = 0;
+        chunkCount = 0; clipRuns = 0; slowLra = null; slowNoise = null;
+      }
+      reset();
+
+      function finish() {
+        const i30 = chunkCount % 30;
+        zRing[i30] = sw / hop;
+        cLL[i30] = sLL; cRR[i30] = sRR; cLR[i30] = sLR; cM[i30] = sM; cS[i30] = sS;
+        pRing[chunkCount % 10] = cpeak;
+        rawDb.push(dbOf(sr / hop / 2 + 1e-12));
+        chunkCount++;
+        if (chunkCount >= 30 && chunkCount % 10 === 0) {
+          let t = 0;
+          for (let k = 0; k < 30; k++) t += zRing[k];
+          stPow.push(t / 30);
+        }
+        n = 0; sw = 0; sr = 0; sLL = 0; sRR = 0; sLR = 0; sM = 0; sS = 0; cpeak = 0;
+      }
+
+      function push(L, R, len) {
+        const chs = [L, R];
+        for (let i = 0; i < len; i++) {
+          for (let c = 0; c < 2; c++) {
+            const v = chs[c][i], a = v < 0 ? -v : v, q = stt[c];
+            if (a > cpeak) cpeak = a;
+            if (a >= 0.999) { if (++q.run === 3) clipRuns++; } else q.run = 0;
+            const y = kHS.b0 * v + q.s1a; q.s1a = kHS.b1 * v - kHS.a1 * y + q.s1b; q.s1b = kHS.b2 * v - kHS.a2 * y;
+            const z = kHP.b0 * y + q.s2a; q.s2a = kHP.b1 * y - kHP.a1 * z + q.s2b; q.s2b = kHP.b2 * y - kHP.a2 * z;
+            sw += z * z; sr += v * v;
+          }
+          const l = L[i], r = R[i];
+          sLL += l * l; sRR += r * r; sLR += l * r;
+          const m = l + r, d = l - r; sM += m * m; sS += d * d;
+          if (++n === hop) finish();
+        }
+      }
+
+      // slow = true recalcula LRA e ruído (mais pesados)
+      function snapshot(slow, mono) {
+        const out = { momentary: -Infinity, peakDb: -Infinity, corr: null, dualMono: false, lra: slowLra, noiseFloor: slowNoise, clipRuns: clipRuns };
+        if (chunkCount >= 4) {
+          let t = 0;
+          for (let k = 1; k <= 4; k++) t += zRing[(chunkCount - k) % 30];
+          out.momentary = t > 0 ? -0.691 + dbOf(t / 4) - (mono ? 3.01 : 0) : -Infinity;
+        }
+        const np = Math.min(chunkCount, 10);
+        let pk = 0;
+        for (let k = 0; k < np; k++) if (pRing[k] > pk) pk = pRing[k];
+        out.peakDb = pk > 0 ? 20 * Math.log10(pk) : -Infinity;
+        const nc = Math.min(chunkCount, 30);
+        let aLL = 0, aRR = 0, aLR = 0, aM = 0, aS = 0;
+        for (let k = 0; k < nc; k++) { aLL += cLL[k]; aRR += cRR[k]; aLR += cLR[k]; aM += cM[k]; aS += cS[k]; }
+        if (aLL > 0 && aRR > 0) out.corr = aLR / Math.sqrt(aLL * aRR);
+        out.dualMono = aM > 0 && aS / aM < 1e-6;
+        if (slow) {
+          slowLra = lraFromShortTerm(stPow);
+          slowNoise = noiseFloorFromDb(rawDb);
+          out.lra = slowLra; out.noiseFloor = slowNoise;
+        }
+        return out;
+      }
+      return { push: push, snapshot: snapshot, reset: reset };
+    }
+
+    // Mede o áudio decodificado (buf: AudioBuffer ou objeto equivalente)
+    async function measureBuffer(buf, onStep) {
+      const fs = buf.sampleRate, len = buf.length;
+      const nch = Math.min(2, buf.numberOfChannels);
+      const ch = [];
+      for (let c = 0; c < nch; c++) ch.push(buf.getChannelData(c));
+      const r = { fs: fs, len: len, nch: nch, duration: len / fs };
+
+      // ---- 1) volume (LUFS), pico, estouros e DC ----
+      onStep('Medindo volume, picos e distorção…');
+      const hop = Math.round(fs * 0.1);
+      const nChunks = Math.floor(len / hop);
+      if (nChunks < 5) throw new Error('áudio muito curto');
+      const kw = kCoefs(fs), kHS = kw.hs, kHP = kw.hp;
+      const msW = [], msRaw = [];
+      let peak = 0, runs = 0, dcMax = 0;
+      for (let c = 0; c < nch; c++) {
+        const x = ch[c];
+        const eW = new Float64Array(nChunks), eR = new Float64Array(nChunks);
+        let s1a = 0, s1b = 0, s2a = 0, s2b = 0, run = 0, sum = 0;
+        for (let ci = 0; ci < nChunks; ci++) {
+          const start = ci * hop, end = start + hop;
+          let sw = 0, sr = 0;
+          for (let i = start; i < end; i++) {
+            const v = x[i], av = v < 0 ? -v : v;
+            if (av > peak) peak = av;
+            if (av >= 0.999) { if (++run === 3) runs++; } else run = 0;
+            sum += v; sr += v * v;
+            const y = kHS.b0 * v + s1a; s1a = kHS.b1 * v - kHS.a1 * y + s1b; s1b = kHS.b2 * v - kHS.a2 * y;
+            const z = kHP.b0 * y + s2a; s2a = kHP.b1 * y - kHP.a1 * z + s2b; s2b = kHP.b2 * y - kHP.a2 * z;
+            sw += z * z;
+          }
+          eW[ci] = sw / hop; eR[ci] = sr / hop;
+          if ((ci & 63) === 63) await tick();
+        }
+        msW.push(eW); msRaw.push(eR);
+        dcMax = Math.max(dcMax, Math.abs(sum / (nChunks * hop)));
+      }
+      r.peakDb = peak > 0 ? 20 * Math.log10(peak) : -Infinity;
+      r.clipRuns = runs;
+      r.dc = dcMax;
+
+      const z = new Float64Array(nChunks), rawDb = new Float64Array(nChunks);
+      for (let i = 0; i < nChunks; i++) {
+        let s = 0, q = 0;
+        for (let c = 0; c < nch; c++) { s += msW[c][i]; q += msRaw[c][i]; }
+        z[i] = s; rawDb[i] = dbOf(q / nch + 1e-12);
+      }
+      const lufsOf = (p) => -0.691 + dbOf(p);
+      const absThr = Math.pow(10, (-70 + 0.691) / 10);
+      const nB = nChunks - 3;
+      const bz = new Float64Array(nB);
+      for (let j = 0; j < nB; j++) bz[j] = (z[j] + z[j + 1] + z[j + 2] + z[j + 3]) / 4;
+      let g1 = 0, n1 = 0;
+      for (let j = 0; j < nB; j++) if (bz[j] > absThr) { g1 += bz[j]; n1++; }
+      r.lufs = -Infinity;
+      if (n1 > 0) {
+        const relThr = (g1 / n1) * 0.1;
+        let g2 = 0, n2 = 0;
+        for (let j = 0; j < nB; j++) if (bz[j] > absThr && bz[j] > relThr) { g2 += bz[j]; n2++; }
+        if (n2 > 0) r.lufs = lufsOf(g2 / n2);
+      }
+
+      // dinâmica (LRA) com janelas de 3 s
+      r.lra = null;
+      if (nChunks >= 60) {
+        const st = [];
+        for (let k = 0; k + 30 <= nChunks; k += 10) {
+          let s = 0; for (let i = k; i < k + 30; i++) s += z[i];
+          st.push(s / 30);
+        }
+        r.lra = lraFromShortTerm(st);
+      }
+
+      // ruído de fundo nas partes calmas
+      r.noiseFloor = null;
+      r.noiseFloor = noiseFloorFromDb(rawDb);
+
+      // ---- 2) estéreo ----
+      r.corr = 1; r.dualMono = false;
+      if (nch === 2) {
+        onStep('Analisando imagem estéreo…');
+        const L = ch[0], R = ch[1];
+        let sLR = 0, sLL = 0, sRR = 0, sM = 0, sS = 0;
+        for (let i = 0; i < len; i++) {
+          const l = L[i], rr = R[i];
+          sLR += l * rr; sLL += l * l; sRR += rr * rr;
+          const m = l + rr, s = l - rr; sM += m * m; sS += s * s;
+          if ((i & 0x7FFFF) === 0x7FFFF) await tick();
+        }
+        r.corr = (sLL > 0 && sRR > 0) ? sLR / Math.sqrt(sLL * sRR) : 1;
+        r.dualMono = sM > 0 && sS / sM < 1e-6;
+      }
+
+      // ---- 3) espectro médio (FFT 8192) ----
+      onStep('Analisando frequências…');
+      r.lfmf = null; r.hfmf = null; r.cutoff = null; r.hum = null;
+      const N = 8192;
+      if (len >= N) {
+        const fft = makeFFT(N);
+        const win = new Float64Array(N);
+        for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (N - 1));
+        const re = new Float64Array(N), im = new Float64Array(N);
+        const P = new Float64Array(N / 2 + 1);
+        const F = Math.min(150, Math.max(1, Math.floor(len / N)));
+        let used = 0;
+        for (let f = 0; f < F; f++) {
+          const pos = F === 1 ? 0 : Math.floor(f * (len - N) / (F - 1));
+          let e = 0;
+          for (let i = 0; i < N; i++) {
+            const m = nch > 1 ? (ch[0][pos + i] + ch[1][pos + i]) * 0.5 : ch[0][pos + i];
+            e += m * m; re[i] = m * win[i]; im[i] = 0;
+          }
+          if (e / N < 1e-7) continue;
+          fft(re, im);
+          for (let k = 0; k <= N / 2; k++) P[k] += re[k] * re[k] + im[k] * im[k];
+          used++;
+          if ((f % 10) === 9) await tick();
+        }
+        if (used > 0) {
+          const sm = spectrumMetrics(P, N, fs);
+          r.lfmf = sm.lfmf; r.hfmf = sm.hfmf; r.cutoff = sm.cutoff; r.hum = sm.hum;
+        }
+      }
+
+      r.issues = buildIssues(r);
+      r.score = Math.max(0, 100 - r.issues.reduce((a, i) => a + i.pts, 0));
+      return r;
+    }
+
+    // Referências típicas de música (relativas ao nível dos médios 250 Hz - 2 kHz)
+    const REF_LF = 5, REF_HF = -13;
+
+    function buildIssues(r) {
+      const out = [];
+      const f1 = (v) => v.toFixed(1);
+      if (!isFinite(r.lufs)) {
+        out.push({ sev: 'alta', pts: 30, title: 'Áudio praticamente silencioso',
+          detail: 'Não foi detectado sinal acima do limite audível.', fix: 'Confira se o arquivo é o correto ou grave novamente com mais nível.', auto: false });
+        return out;
+      }
+      const perMin = r.clipRuns / Math.max(1 / 60, r.duration / 60);
+      if (r.clipRuns > 0) {
+        const severe = perMin > 10;
+        out.push({ sev: severe ? 'alta' : 'media', pts: severe ? 20 : 8, title: 'Distorção por estouro (clipping)',
+          detail: 'Foram encontrados ' + r.clipRuns + ' trechos em que o sinal bateu no limite digital (pico em ' + f1(r.peakDb) + ' dBFS). Isso soa como chiado áspero em momentos fortes.',
+          fix: 'O estouro já gravado não pode ser desfeito com precisão. Use uma versão com menos volume na origem. A correção automática impede novos estouros com um limitador.', auto: false });
+      }
+      if (r.lufs < -20) {
+        out.push({ sev: 'media', pts: 8, title: 'Volume baixo',
+          detail: 'Volume integrado de cerca de ' + f1(r.lufs) + ' LUFS. Em celular e notebook pode faltar presença.',
+          fix: 'Aumentar o volume geral para perto de -14 LUFS.', auto: true });
+      } else if (r.lufs > -9) {
+        out.push({ sev: 'media', pts: 8, title: 'Volume muito alto (masterização agressiva)',
+          detail: 'Volume integrado de cerca de ' + f1(r.lufs) + ' LUFS. Plataformas como o YouTube reduzem acima de -14 LUFS e o som pode ficar cansativo.',
+          fix: 'Reduzir o volume geral para perto de -14 LUFS.', auto: true });
+      }
+      if (r.lra !== null && r.lra < 4) {
+        out.push({ sev: 'media', pts: 8, title: 'Dinâmica muito comprimida',
+          detail: 'Variação de volume de apenas ' + f1(r.lra) + ' LU. Quase não há diferença entre trechos fracos e fortes.',
+          fix: 'Procure uma versão com menos compressão. A dinâmica perdida não pode ser recuperada.', auto: false });
+      } else if (r.lra !== null && r.lra > 20) {
+        out.push({ sev: 'baixa', pts: 3, title: 'Dinâmica muito ampla',
+          detail: 'Variação de ' + f1(r.lra) + ' LU: partes calmas podem ficar baixas demais em ambientes com ruído.',
+          fix: 'Ouça em ambiente silencioso ou use um compressor suave ao exportar.', auto: false });
+      }
+      if (r.cutoff !== null && r.cutoff < 16500) {
+        out.push({ sev: r.cutoff < 14000 ? 'alta' : 'media', pts: r.cutoff < 14000 ? 15 : 10, title: 'Agudos cortados em cerca de ' + (r.cutoff / 1000).toFixed(1) + ' kHz',
+          detail: 'Isso é típico de MP3/AAC com taxa baixa (até 128 kbps) ou de gravações limitadas. O som perde brilho e "ar".',
+          fix: 'Use o arquivo original ou uma versão em 256 kbps ou mais, ou sem perdas (FLAC/WAV). O que foi cortado não pode ser recuperado.', auto: false });
+      } else if (r.cutoff !== null && r.cutoff < 19000) {
+        out.push({ sev: 'baixa', pts: 3, title: 'Possível compressão moderada nos agudos',
+          detail: 'O conteúdo de frequências altas termina perto de ' + (r.cutoff / 1000).toFixed(1) + ' kHz.',
+          fix: 'Se houver uma versão de maior qualidade, prefira-a.', auto: false });
+      }
+      if (r.lfmf !== null) {
+        const dl = r.lfmf - REF_LF;
+        if (dl > 4) out.push({ sev: dl > 8 ? 'media' : 'baixa', pts: dl > 8 ? 8 : 4, title: 'Graves em excesso',
+          detail: 'Os graves estão cerca de ' + f1(dl) + ' dB acima do equilíbrio típico. Pode soar abafado ou "pesado".',
+          fix: 'Reduzir os graves no equalizador.', auto: true });
+        else if (dl < -4) out.push({ sev: dl < -8 ? 'media' : 'baixa', pts: dl < -8 ? 8 : 4, title: 'Graves fracos',
+          detail: 'Os graves estão cerca de ' + f1(-dl) + ' dB abaixo do equilíbrio típico. O som pode parecer fino.',
+          fix: 'Aumentar os graves no equalizador.', auto: true });
+        const dh = r.hfmf - REF_HF;
+        if (dh > 4) out.push({ sev: dh > 8 ? 'media' : 'baixa', pts: dh > 8 ? 8 : 4, title: 'Agudos em excesso',
+          detail: 'Os agudos estão cerca de ' + f1(dh) + ' dB acima do equilíbrio típico. Pode soar áspero ou com chiado.',
+          fix: 'Reduzir os agudos no equalizador.', auto: true });
+        else if (dh < -4) out.push({ sev: dh < -8 ? 'media' : 'baixa', pts: dh < -8 ? 8 : 4, title: 'Agudos fracos (som abafado)',
+          detail: 'Os agudos estão cerca de ' + f1(-dh) + ' dB abaixo do equilíbrio típico. O som pode parecer escuro e sem clareza.',
+          fix: 'Aumentar os agudos no equalizador.', auto: true });
+      }
+      if (r.hum) {
+        out.push({ sev: 'media', pts: 8, title: 'Possível zumbido de ' + r.hum.freq + ' Hz',
+          detail: 'Há um tom constante em ' + r.hum.freq + ' Hz e em ' + (2 * r.hum.freq) + ' Hz, comum em interferência da rede elétrica ou cabo mal aterrado.',
+          fix: 'Aplicar um filtro estreito nessas frequências.', auto: true });
+      }
+      if (r.dc > 0.005) {
+        out.push({ sev: 'baixa', pts: 3, title: 'Deslocamento de DC',
+          detail: 'O sinal está levemente deslocado do zero, o que reduz a margem de volume e pode causar estalos.',
+          fix: 'Aplicar um filtro de subgrave em 20 Hz.', auto: true });
+      }
+      if (r.noiseFloor !== null && r.noiseFloor > -58) {
+        out.push({ sev: 'media', pts: 10, title: 'Ruído de fundo nas partes calmas',
+          detail: 'Nos trechos mais silenciosos o nível fica em torno de ' + f1(r.noiseFloor) + ' dBFS, indicando chiado ou ruído de ambiente.',
+          fix: 'Use um removedor de ruído dedicado (por exemplo o do Audacity) antes de ouvir ou exportar.', auto: false });
+      }
+      if (r.nch === 2 && r.corr < 0) {
+        out.push({ sev: 'media', pts: 10, title: 'Problema de fase estéreo',
+          detail: 'Os canais esquerdo e direito estão em oposição (correlação ' + f1(r.corr) + '). Ao somar em mono, partes do som podem sumir.',
+          fix: 'Verifique a polaridade de um dos canais na gravação ou mixagem.', auto: false });
+      }
+      if (r.nch === 2 && r.dualMono) {
+        out.push({ sev: 'baixa', pts: 2, title: 'Áudio mono em dois canais',
+          detail: 'Os canais esquerdo e direito são idênticos, então não há imagem estéreo.',
+          fix: 'Se esperava estéreo, procure outra versão do arquivo.', auto: false });
+      }
+      return out;
+    }
+
+    // Plano de correção automática baseado nas medições
+    function buildFixPlan(r) {
+      const plan = { hum: 0, eq: { low: 0, mid: 0, high: 0 }, gain: 1, gainDb: 0, steps: [] };
+      plan.steps.push('Filtro de subgrave em 20 Hz (remove DC e ruído abaixo da faixa audível)');
+      if (r.hum) {
+        plan.hum = r.hum.freq;
+        plan.steps.push('Filtro anti-zumbido em ' + r.hum.freq + ' Hz e ' + (2 * r.hum.freq) + ' Hz');
+      }
+      if (r.lfmf !== null) {
+        const dl = r.lfmf - REF_LF, dh = r.hfmf - REF_HF;
+        const half = (v) => Math.round(v * 2) / 2;
+        if (Math.abs(dl) > 4) plan.eq.low = half(clamp(-dl * 0.5, -4, 4));
+        if (Math.abs(dh) > 4) plan.eq.high = half(clamp(-dh * 0.5, -4, 4));
+        // com agudos já cortados pela compressão, reforçar muito só realça artefatos
+        if (r.cutoff !== null && r.cutoff < 16500) plan.eq.high = Math.min(plan.eq.high, 1.5);
+        if (plan.eq.low !== 0 || plan.eq.high !== 0) {
+          plan.steps.push('Equalização automática: graves ' + sgn(plan.eq.low) + ' dB, agudos ' + sgn(plan.eq.high) + ' dB');
+        }
+      }
+      if (isFinite(r.lufs)) {
+        const gdb = clamp(-14 - r.lufs, -12, 6);
+        if (Math.abs(gdb) >= 1) {
+          const lin = clamp(Math.pow(10, gdb / 20), 0.25, 2);
+          plan.gain = +(Math.round(lin / 0.05) * 0.05).toFixed(2);
+          plan.gainDb = 20 * Math.log10(plan.gain);
+          plan.steps.push('Volume nivelado para perto de -14 LUFS (' + sgn(plan.gainDb) + ' dB)');
+        }
+      }
+      plan.steps.push('Limitador de picos em -1 dB (evita novos estouros)');
+      return plan;
+    }
+    /*AI-END*/
+
+    const LIMITER_TRIM = 0.94; // compensa o ganho automático do compressor do navegador
+    // ---------- Interface: análise e correção (aparece só quando toca apenas áudio) ----------
+    const aiFileEl = document.getElementById('aiFile');
+    const aiAnalyzeBtn = document.getElementById('aiAnalyzeBtn');
+    const aiFixBtn = document.getElementById('aiFixBtn');
+    const aiStatus = document.getElementById('aiStatus');
+    const aiFixBox = document.getElementById('aiFixBox');
+    const aiReport = document.getElementById('aiReport');
+    const aiIssues = document.getElementById('aiIssues');
+    let currentFile = null, aiResult = null, aiBusy = false, aiFixed = false, aiPrev = null;
+    const AI_MAX_BYTES = 200 * 1024 * 1024;
+
+    media.addEventListener('loadedmetadata', () => {
+      const audioOnly = media.videoWidth === 0;
+      document.body.classList.toggle('audio-only', audioOnly);
+      aiFileEl.textContent = '🎧 ' + currentFileName;
+      if (audioOnly && !aiResult && !aiBusy) aiStatus.textContent = 'Clique em "Analisar qualidade" para avaliar este áudio.';
+    });
+
+    function setAiButtons() {
+      aiAnalyzeBtn.disabled = aiBusy;
+      aiFixBtn.disabled = aiBusy;
+      aiFixBtn.textContent = aiFixed ? '↩ Desfazer correção' : '✨ Corrigir pela I.A.';
+      aiFixBtn.classList.toggle('applied', aiFixed);
+    }
+
+    function resetAi() {
+      if (aiFixed) undoFix();
+      aiResult = null;
+      aiReport.innerHTML = '';
+      aiIssues.innerHTML = '';
+      aiFixBox.innerHTML = '';
+      aiStatus.textContent = '';
+      rtReset();
+      setAiButtons();
+    }
+
+    function renderReport(r) {
+      const col = r.score >= 90 ? '#00e676' : r.score >= 75 ? '#8bc34a' : r.score >= 55 ? '#ffeb3b' : '#ff1744';
+      const label = r.score >= 90 ? 'Excelente' : r.score >= 75 ? 'Boa' : r.score >= 55 ? 'Regular' : 'Precisa de atenção';
+      const n = r.issues.length;
+      const num = (v, u, d) => isFinite(v) ? v.toFixed(d === undefined ? 1 : d) + u : '—';
+      const cards = [
+        ['Duração', formatTime(r.duration)],
+        ['Canais', r.nch === 2 ? (r.dualMono ? 'Estéreo (L = R)' : 'Estéreo') : 'Mono'],
+        ['Volume (aprox.)', num(r.lufs, ' LUFS')],
+        ['Pico', num(r.peakDb, ' dBFS')],
+        ['Dinâmica (LRA)', r.lra === null ? '—' : num(r.lra, ' LU')],
+        ['Agudos até', r.cutoff === null ? '—' : '≈ ' + (r.cutoff / 1000).toFixed(1) + ' kHz'],
+        ['Fase estéreo', r.nch === 2 ? num(r.corr, '', 2) : '—'],
+        ['Trechos estourados', String(r.clipRuns)],
+        ['Ruído nas pausas', r.noiseFloor === null ? 'não avaliado' : num(r.noiseFloor, ' dBFS')]
+      ];
+      let h = '<div class="ai-score"><div class="ai-score-num" style="color:' + col + '">' + r.score + '</div>' +
+        '<div class="ai-score-txt"><b>Qualidade ' + label + '</b>' +
+        (n ? n + (n === 1 ? ' ponto pode melhorar.' : ' pontos podem melhorar.') : 'Nenhum problema relevante encontrado.') + '</div></div>';
+      h += '<div class="ai-h">Medições</div><div class="ai-grid">' +
+        cards.map(c => '<div class="ai-card"><small>' + c[0] + '</small><span>' + c[1] + '</span></div>').join('') + '</div>';
+      aiReport.innerHTML = h;
+      h = '';
+      if (n) {
+        h += '<div class="ai-h">O que pode melhorar</div>' + r.issues.map(i =>
+          '<div class="ai-issue ' + i.sev + '"><b>' + i.title + '</b>' + i.detail +
+          '<br><em>Como melhorar:</em> ' + i.fix + (i.auto ? ' <em>✨ O botão "Corrigir pela I.A." faz isso.</em>' : '') + '</div>').join('');
+      }
+      h += '<div class="ai-note">Análise automática feita no seu computador, a partir de medições do sinal de áudio. Os limites são referências típicas de música; em voz falada ou estilos específicos os resultados podem variar. A pontuação é uma estimativa.</div>';
+      aiIssues.innerHTML = h;
+    }
+
+    async function runAnalysis() {
+      if (aiBusy || !currentFile) return null;
+      if (currentFile.size > AI_MAX_BYTES) {
+        aiStatus.textContent = 'Arquivo grande demais para análise (limite de 200 MB).';
+        return null;
+      }
+      aiBusy = true; setAiButtons();
+      aiReport.innerHTML = '';
+      aiIssues.innerHTML = '';
+      try {
+        aiStatus.textContent = 'Decodificando o áudio…';
+        await tick();
+        const ab = await currentFile.arrayBuffer();
+        const decoded = await new OfflineAudioContext(1, 1, 48000).decodeAudioData(ab);
+        aiResult = await measureBuffer(decoded, (t) => { aiStatus.textContent = t; });
+        renderReport(aiResult);
+        aiStatus.textContent = 'Análise concluída.';
+      } catch (e) {
+        aiResult = null;
+        aiStatus.textContent = 'Não foi possível analisar este arquivo (' + (e && e.message ? e.message : 'erro') + ').';
+      }
+      aiBusy = false; setAiButtons();
+      return aiResult;
+    }
+
+    function applyFix(plan) {
+      initAudio();
+      aiPrev = { low: parseFloat(eqLow.value), mid: parseFloat(eqMid.value), high: parseFloat(eqHigh.value), gain: parseFloat(gainSlider.value) };
+
+      fixHP.type = 'highpass'; fixHP.frequency.value = 20; fixHP.Q.value = 0.707;
+      [hum1, hum2].forEach((nd, i) => {
+        if (plan.hum) { nd.type = 'peaking'; nd.frequency.value = plan.hum * (i + 1); nd.Q.value = 30; nd.gain.value = -24; }
+        else nd.gain.value = 0;
+      });
+      limiter.threshold.value = -1; limiter.knee.value = 0; limiter.ratio.value = 20;
+      limiter.attack.value = 0.003; limiter.release.value = 0.1;
+      limTrim.gain.value = LIMITER_TRIM;
+
+      applyEq(plan.eq.low, plan.eq.mid, plan.eq.high);
+      setActiveTab('manual');
+      setSlider(gainSlider, plan.gain);
+
+      aiFixed = true;
+      aiFixBox.innerHTML = '<div class="ai-fixbox"><b>✨ Correção aplicada</b><ul>' +
+        plan.steps.map(s => '<li>' + s + '</li>').join('') + '</ul>' +
+        '<div class="ai-note">Use "Desfazer correção" para comparar com o original. A correção melhora equilíbrio e volume, mas não recupera detalhes já perdidos (compressão MP3, estouros).</div></div>';
+      setAiButtons();
+    }
+
+    function undoFix() {
+      if (fixHP) {
+        fixHP.type = 'peaking'; fixHP.gain.value = 0; fixHP.frequency.value = 1000;
+        [hum1, hum2].forEach(nd => { nd.type = 'peaking'; nd.gain.value = 0; });
+        limiter.threshold.value = 0; limiter.ratio.value = 1; limTrim.gain.value = 1;
+      }
+      if (aiPrev) {
+        applyEq(aiPrev.low, aiPrev.mid, aiPrev.high);
+        setSlider(gainSlider, aiPrev.gain);
+        aiPrev = null;
+      }
+      aiFixed = false;
+      aiFixBox.innerHTML = '';
+      setAiButtons();
+    }
+
+
+    // ---------- Medições em tempo real ----------
+    const rtIds = ['rtDur', 'rtCh', 'rtLufs', 'rtPeak', 'rtLra', 'rtCut', 'rtCorr', 'rtClip', 'rtNoise'];
+    const rtEls = {};
+    rtIds.forEach(id => { rtEls[id] = document.getElementById(id); });
+    let rtSpecBuf = null, rtCutHist = [], rtSpecTick = 0, rtUpdTick = 0;
+
+    function setRt(id, text) { if (rtEls[id].textContent !== text) rtEls[id].textContent = text; }
+
+    function rtReset() {
+      if (rtMeter) rtMeter.reset();
+      rtCutHist = []; rtSpecTick = 0;
+      rtIds.forEach(id => { if (id !== 'rtDur') setRt(id, '—'); });
+    }
+    document.getElementById('aiRtReset').onclick = rtReset;
+
+    // amostra o espectro a cada 100 ms; a largura de banda é a mediana das últimas leituras
+    function sampleSpectrum() {
+      if (!rtAn || !rtMeter || media.paused) return;
+      if (!rtSpecBuf) rtSpecBuf = new Float32Array(rtAn.frequencyBinCount);
+      rtAn.getFloatFrequencyData(rtSpecBuf);
+      if (++rtSpecTick % 5 !== 0) return;
+      if (!(rtMeter.snapshot(false, false).momentary > -60)) return;
+      const N = rtAn.fftSize, P = new Float64Array(N / 2 + 1);
+      for (let k = 0; k < rtSpecBuf.length; k++) P[k] = Math.pow(10, rtSpecBuf[k] / 10);
+      P[N / 2] = P[N / 2 - 1];
+      const sm = spectrumMetrics(P, N, audioCtx.sampleRate);
+      if (sm.cutoff !== null) { rtCutHist.push(sm.cutoff); if (rtCutHist.length > 9) rtCutHist.shift(); }
+    }
+
+    function updateRt() {
+      if (!document.body.classList.contains('audio-only')) return;
+      const dur = isFinite(media.duration) ? media.duration : 0;
+      setRt('rtDur', formatTime(media.currentTime || 0) + ' / ' + formatTime(dur));
+      if (!rtMeter) { setRt('rtLufs', 'indisponível'); return; }
+      const mono = !!(aiResult && aiResult.nch === 1);
+      const s = rtMeter.snapshot((++rtUpdTick % 8) === 0, mono);
+      const has = isFinite(s.momentary);
+      const num = (v, u, d) => isFinite(v) ? v.toFixed(d === undefined ? 1 : d) + u : '—';
+      setRt('rtCh', !has ? '—' : mono ? 'Mono' : (s.dualMono ? 'Estéreo (L = R)' : 'Estéreo'));
+      setRt('rtLufs', num(s.momentary, ' LUFS'));
+      setRt('rtPeak', num(s.peakDb, ' dBFS'));
+      setRt('rtLra', s.lra === null ? '—' : num(s.lra, ' LU'));
+      setRt('rtCut', rtCutHist.length ? '≈ ' + (median(rtCutHist) / 1000).toFixed(1) + ' kHz' : '—');
+      setRt('rtCorr', (!mono && s.corr !== null) ? s.corr.toFixed(2) : '—');
+      setRt('rtClip', has || s.clipRuns ? String(s.clipRuns) : '—');
+      setRt('rtNoise', s.noiseFloor === null ? 'não avaliado' : num(s.noiseFloor, ' dBFS'));
+    }
+    setInterval(sampleSpectrum, 100);
+    setInterval(updateRt, 250);
+
+    aiAnalyzeBtn.onclick = () => { runAnalysis(); };
+    aiFixBtn.onclick = async () => {
+      if (aiBusy) return;
+      if (aiFixed) { undoFix(); return; }
+      const r = aiResult || await runAnalysis();
+      if (r) applyFix(buildFixPlan(r));
+    };
+
+    // ---------- Gravação Full HD (1920x1080) com áudio de alta qualidade ----------
+    const REC_W = 1920, REC_H = 1080, REC_FPS = 30;
+    const REC_VIDEO_BPS = 12000000;   // 12 Mbps de vídeo
+    const REC_AUDIO_BPS = 320000;     // 320 kbps de áudio (Opus, estéreo, 48 kHz)
+    let recCanvas, recCtx, recRAF = 0, recLimiter = null, recTrim = null, currentFileName = '';
+
+    // Desenha cada quadro em 1920x1080 (com barras pretas se a proporção for diferente)
+    function drawRecFrame() {
+      recCtx.fillStyle = '#000';
+      recCtx.fillRect(0, 0, REC_W, REC_H);
+      const vw = media.videoWidth, vh = media.videoHeight;
+      if (vw && vh) {
+        const sc = Math.min(REC_W / vw, REC_H / vh);
+        const dw = vw * sc, dh = vh * sc;
+        recCtx.drawImage(media, (REC_W - dw) / 2, (REC_H - dh) / 2, dw, dh);
+      } else if (currentFileName) {
+        recCtx.fillStyle = '#666';
+        recCtx.font = '48px "Segoe UI", sans-serif';
+        recCtx.textAlign = 'center';
+        recCtx.fillText(currentFileName, REC_W / 2, REC_H / 2, REC_W - 200);
+      }
+    }
+    function recLoop() {
+      if (!isRecording) return;
+      drawRecFrame();
+      recRAF = requestAnimationFrame(recLoop);
+    }
+    function pickRecMime() {
+      let list = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+      // no Android prefere MP4 (H.264 + AAC): codificação por hardware e abre em qualquer app
+      if (window.AndroidBridge) list = ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4'].concat(list);
+      return list.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || '';
+    }
+
+    if (window.AndroidBridge) recStatus.textContent = 'Pronto: Full HD 1080p · áudio 320 kbps';
+
+    // Salva a gravação: no Windows baixa o arquivo; no Android grava em Downloads/MPC-HC Player
+    async function saveRecording(blob, ext) {
+      const name = 'mpc-ajustado-' + Date.now() + '.' + ext;
+      const mb = (blob.size / 1048576).toFixed(1);
+      if (window.AndroidBridge) {
+        recStatus.textContent = 'Salvando no aparelho…';
+        try {
+          if (!AndroidBridge.beginSave(name, blob.type)) throw new Error('não foi possível criar o arquivo');
+          const CH = 3 * 1024 * 1024;
+          for (let off = 0; off < blob.size; off += CH) {
+            const b64 = await new Promise((res, rej) => {
+              const fr = new FileReader();
+              fr.onload = () => res(String(fr.result).split(',')[1] || '');
+              fr.onerror = () => rej(new Error('falha ao ler a gravação'));
+              fr.readAsDataURL(blob.slice(off, off + CH));
+            });
+            if (!AndroidBridge.writeChunk(b64)) throw new Error('falha ao gravar no aparelho');
+          }
+          const path = AndroidBridge.endSave();
+          if (!path) throw new Error('falha ao concluir o arquivo');
+          recStatus.textContent = 'Salvo em ' + path + ' (' + mb + ' MB)';
+        } catch (e) {
+          try { AndroidBridge.cancelSave(); } catch (_) {}
+          recStatus.textContent = 'Não foi possível salvar: ' + (e && e.message ? e.message : 'erro');
+        }
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }, 100);
+      recStatus.textContent = 'Arquivo salvo (' + mb + ' MB) · Full HD 1080p';
+    }
+
+    function startRecording() {
+      initAudio();
+      recordedChunks = [];
+
+      if (!recCanvas) {
+        recCanvas = document.createElement('canvas');
+        recCanvas.width = REC_W;
+        recCanvas.height = REC_H;
+        recCtx = recCanvas.getContext('2d', { alpha: false });
+        recCtx.imageSmoothingEnabled = true;
+        recCtx.imageSmoothingQuality = 'high';
+      }
+      drawRecFrame();
+
+      // Limitador de segurança: evita estouro (clipping) no arquivo quando o EQ aumenta o nível
+      recLimiter = audioCtx.createDynamicsCompressor();
+      recLimiter.threshold.value = -1;
+      recLimiter.knee.value = 0;
+      recLimiter.ratio.value = 20;
+      recLimiter.attack.value = 0.003;
+      recLimiter.release.value = 0.12;
+
+      const dest = audioCtx.createMediaStreamDestination();
+      recTrim = audioCtx.createGain();
+      recTrim.gain.value = LIMITER_TRIM;
+      masterGain.connect(recLimiter);
+      recLimiter.connect(recTrim);
+      recTrim.connect(dest);
+      recDest = dest;
+
+      const combinedStream = new MediaStream([
+        ...recCanvas.captureStream(REC_FPS).getVideoTracks(),
+        ...dest.stream.getAudioTracks()
+      ]);
+
+      const opts = { videoBitsPerSecond: REC_VIDEO_BPS, audioBitsPerSecond: REC_AUDIO_BPS };
+      const mimeType = pickRecMime();
+      if (mimeType) opts.mimeType = mimeType;
+      try {
+        mediaRecorder = new MediaRecorder(combinedStream, opts);
+      } catch (e) {
+        mediaRecorder = new MediaRecorder(combinedStream);
+      }
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        cancelAnimationFrame(recRAF);
+        if (recDest) {
+          try { masterGain.disconnect(recLimiter); } catch (e) {}
+          try { recLimiter.disconnect(); } catch (e) {}
+          try { recTrim.disconnect(); } catch (e) {}
+          recDest = null;
+          recLimiter = null;
+        }
+        combinedStream.getTracks().forEach(t => t.stop());
+
+        const mt = ((mediaRecorder && mediaRecorder.mimeType) || '').split(';')[0] || 'video/webm';
+        const blob = new Blob(recordedChunks, { type: mt });
+        recordedChunks = [];
+        saveRecording(blob, mt.indexOf('mp4') >= 0 ? 'mp4' : 'webm');
+      };
+
+      mediaRecorder.start(1000);
+      isRecording = true;
+      recLoop();
+      recordBtn.textContent = '⏹ Parar e Salvar Vídeo';
+      recordBtn.classList.add('recording');
+      recStatus.textContent = 'Gravando em Full HD 1920×1080 · áudio ' + (/mp4/.test(mediaRecorder.mimeType || '') ? 'AAC' : 'Opus') + ' 320 kbps';
+      if (media.paused) media.play();
+    }
+
+    media.addEventListener('ended', () => { if (isRecording) stopRecording(); });
+
+    function stopRecording() {
+      if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+        recordBtn.textContent = '🔴 Gravar Vídeo c/ Ajustes';
+        recordBtn.classList.remove('recording');
+      }
+    }
+  </script>
+</body>
+</html>

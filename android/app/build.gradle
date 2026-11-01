@@ -1,0 +1,40 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'br.com.mpchc.player'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'br.com.mpchc.player'
+        minSdk 29
+        targetSdk 34
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.11.0'
+}
+
+// Usa o MESMO index.html do programa de Windows (pasta acima de "android")
+tasks.register('copyWebAssets', Copy) {
+    from file("$rootDir/../index.html")
+    into file("$projectDir/src/main/assets")
+}
+tasks.named('preBuild') {
+    dependsOn 'copyWebAssets'
+}
