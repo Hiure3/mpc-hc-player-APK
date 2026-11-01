@@ -1,0 +1,48 @@
+name: Compilar Executavel e Instalador Windows
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Repositório
+      uses: actions/checkout@v4
+
+    - name: Configurar Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+
+    - name: Instalar Dependências
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Compilar Executável com PyInstaller
+      run: |
+        pyinstaller --noconfirm --onefile --windowed --name MPC-HC-Player --collect-all webview --collect-all clr_loader --add-data "index.html;." main.py
+
+    - name: Instalar Inno Setup
+      run: choco install innosetup -y --no-progress
+
+    - name: Gerar Instalador
+      run: |
+        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+
+    - name: Enviar Instalador (Setup)
+      uses: actions/upload-artifact@v4
+      with:
+        name: MPC-HC-Player-Instalador
+        path: installer_output/MPC-HC-Player-Setup.exe
+
+    - name: Enviar Executável Portátil
+      uses: actions/upload-artifact@v4
+      with:
+        name: MPC-HC-Player-Portatil
+        path: dist/MPC-HC-Player.exe
